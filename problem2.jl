@@ -1,9 +1,10 @@
+# load packages 
+using Optim
 
 # load file
 file = open("eBayNumberOfBidderData.dat")
 data_file = readlines(file)
 close(file)
-
 
 # load convaraites and targets
 nbr_obs = 1000
@@ -18,3 +19,36 @@ for i = 1:nbr_obs
     end
     y[i] = parse(Float64,file_line[1])
 end
+
+
+# how to structe the optimization problem
+#using Optim
+#rosenbrock(x) =  (1.0 - x[1])^2 + 100.0 * (x[2] - x[1]^2)^2
+#result = optimize(rosenbrock, zeros(2), BFGS())
+
+# optmization problem
+
+# logposterior function
+function logposterior(β)
+
+
+
+
+end
+
+# start values for optimizer
+β_start = ones(nbr_covariates)
+
+# run optimization using conjugate gradient decent with numerical gradients
+opt = optimize(logposterior, β_start, ConjugateGradient())
+
+# get parameter estimations (posterior mean)
+β_tilde = Optim.minimizer(opt)
+
+# get Hessian matrix
+numerical_hessian = hessian!(logposterior,β_tilde)
+
+# sample from approx posterior
+
+
+# plot results
