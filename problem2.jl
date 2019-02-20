@@ -1,14 +1,16 @@
 # load packages
+using Optim
 using Distributions
 using KernelDensity
 using PyPlot
+using LinearAlgebra
 
 # load file
 file = open("bivarnormal.dat")
 data_file = readlines(file)
 close(file)
 
-# load convaraites and targets
+# load data
 nbr_obs = 20
 dimensions = 2
 X = zeros(dimensions,nbr_obs)
@@ -25,7 +27,7 @@ for i = 1:nbr_obs
     end
 end
 
-# remove NaNs TODO do something for the missing values
+# remove NaNs TODO: Do something for the missing values!
 X_data = zeros(2,nbr_obs-3)
 X_data[:,1:2] = X[:,1:2]
 X_data[:,3:end] = X[:,6:end]
@@ -48,7 +50,7 @@ x_bar = mean(X, dims = 2) # sample mean
 Σ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))
 
 # Gibbs sampler
-function gibbs(N_samples, μ_post =μ_post, Σ_post = Σ_post)
+function gibbs(N_samples, μ_post = μ_post, Σ_post = Σ_post)
 
     # construct conditional dists
     μ_post_1 = μ_post[1]
@@ -128,4 +130,37 @@ PyPlot.subplot(212)
 PyPlot.plot(h1_μ_2.x,h1_μ_2.density, "b")
 PyPlot.plot(h1_μ_2.x,pdf.(dist_marginal_prior, h1_μ_2.x), "g")
 
-# find optimal action numerically 
+# find optimal action numerically
+
+function utility(α, μ)
+
+    ϕ = min(μ[1], μ[2])
+
+    return -max(0, ϕ-α)-0.1*ϕ*α^2
+
+end
+
+function expected_utility(α, posterior_samples)
+
+    N = size(posterior_samples,2)
+    u_vec = zeros(N)
+
+    for i = 1:N
+        u_vec[i] = utility(α, posterior_samples[:,i])
+    end
+
+
+    return mean(u_vec)
+
+end
+
+obj_func(α) = -expected_utility(α[1], post_samples[:,burn_in+1:end])
+
+α_start = [10.]
+
+opt = optimize(obj_func, α_start, BFGS())
+
+α_tilde = Optim.minimizer(opt)
+
+println("Optimal action:")
+println(α_tilde)

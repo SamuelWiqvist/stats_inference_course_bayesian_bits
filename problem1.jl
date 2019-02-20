@@ -26,19 +26,12 @@ for i = 1:nbr_obs
     y[i] = parse(Float64,file_line[1])
 end
 
-
-# how to structe the optimization problem
-#using Optim
-#rosenbrock(x) =  (1.0 - x[1])^2 + 100.0 * (x[2] - x[1]^2)^2
-#result = optimize(rosenbrock, zeros(2), BFGS())
-
-# set model parameters
-
+# set prior
 τ_0 = 10
 prior_cov_m = τ_0^2*Matrix{Float64}(I, nbr_covariates, nbr_covariates)
 prior_cov_m_inv = inv(prior_cov_m)
-
 dist_marginal_prior = Normal(0, τ_0)
+
 # optmization problem
 
 # logposterior function
