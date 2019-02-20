@@ -1,156 +1,131 @@
 # load packages
-using Optim
-using LinearAlgebra
-#using NLSolversBase
 using Distributions
-using ForwardDiff
 using KernelDensity
 using PyPlot
 
 # load file
-file = open("eBayNumberOfBidderData.dat")
+file = open("bivarnormal.dat")
 data_file = readlines(file)
 close(file)
 
 # load convaraites and targets
-nbr_obs = 1000
-nbr_covariates = 9
-X = zeros(nbr_covariates,nbr_obs)
-y = zeros(nbr_obs)
+nbr_obs = 20
+dimensions = 2
+X = zeros(dimensions,nbr_obs)
+
 
 for i = 1:nbr_obs
     file_line = split(data_file[i+1])
-    for j = 1:nbr_covariates
-        X[j,i] = parse(Float64,file_line[j+1])
+    for j = 1:dimensions
+        if file_line[j] == "NA"
+            X[j,i] = NaN
+        else
+            X[j,i] = parse(Float64,file_line[j])
+        end
     end
-    y[i] = parse(Float64,file_line[1])
 end
 
+# remove NaNs TODO do something for the missing values
+X_data = zeros(2,nbr_obs-3)
+X_data[:,1:2] = X[:,1:2]
+X_data[:,3:end] = X[:,6:end]
+X = X_data
+nbr_obs = nbr_obs-3
 
-# how to structe the optimization problem
-#using Optim
-#rosenbrock(x) =  (1.0 - x[1])^2 + 100.0 * (x[2] - x[1]^2)^2
-#result = optimize(rosenbrock, zeros(2), BFGS())
+# prior dist
+Σ_0 = 10^2*Matrix{Float64}(I, dimensions, dimensions)
+μ_0 = zeros(dimensions)
 
-# set model parameters
+dist_marginal_prior = Normal(0, 10)
 
-τ_0 = 10
-prior_cov_m = τ_0^2*Matrix{Float64}(I, nbr_covariates, nbr_covariates)
-prior_cov_m_inv = inv(prior_cov_m)
 
-dist_marginal_prior = Normal(0, τ_0)
-# optmization problem
+# data model
+Σ = [1 1.5; 1.5 4]
 
-# logposterior function
-function logposterior(β)
+# Joint posterior (see https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution)
+x_bar = mean(X, dims = 2) # sample mean
+μ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))*(inv(Σ_0)*μ_0 + nbr_obs*inv(Σ)*x_bar)
+Σ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))
 
-    logpos = 0.
+# Gibbs sampler
+function gibbs(N_samples, μ_post =μ_post, Σ_post = Σ_post)
 
-    for i = 1:nbr_obs
+    # construct conditional dists
+    μ_post_1 = μ_post[1]
+    μ_post_2 = μ_post[2]
 
-        logpos = logpos + ((X[:,i]'*β)*y[i] - exp(X[:,i]'*β))
+    Σ_post_11 = Σ_post[1,1]
+    Σ_post_22 = Σ_post[2,2]
+    Σ_post_12 = Σ_post[1,2]
+
+    # pre-allocate matrix
+    μ_post_sample = zeros(dimensions, N_samples)
+
+    # set start value
+    μ_2_old = 100
+
+    for i = 1:N_samples
+
+        # sample 1 give 2
+        post_cond_1_give_2_m = μ_post_1+Σ_post_12*inv(Σ_post_22)*(μ_2_old-μ_post_2)
+        post_cond_1_give_2_std = sqrt(Σ_post_11 - Σ_post_12*inv(Σ_post_22)*Σ_post_12)
+
+        sample_cond_1_give_2 = rand(Normal(post_cond_1_give_2_m, post_cond_1_give_2_std))
+
+        # sample 2 give 1
+        post_cond_2_give_1_m = μ_post_2+Σ_post_12*inv(Σ_post_11)*(sample_cond_1_give_2-μ_post_1)
+        post_cond_2_give_1_std = sqrt(Σ_post_22 - Σ_post_12*inv(Σ_post_11)*Σ_post_12)
+        sample_cond_2_give_1 = rand(Normal(post_cond_2_give_1_m, post_cond_2_give_1_std))
+
+        # store samples
+        μ_post_sample[:,i] = [sample_cond_1_give_2;sample_cond_2_give_1]
+
+        # update 2 give 1
+        μ_2_old = sample_cond_2_give_1
 
     end
 
-    logpos = logpos - 0.5*β'prior_cov_m_inv*β
-
-    return -logpos # Optim does minimization, hence the minus sign
+    return μ_post_sample
 
 end
 
-# start values for optimizer
+# run gibbs sampler
+nbr_samples = 10^3
+burn_in = 100
+post_samples = gibbs(nbr_samples+burn_in)
 
-β_start = ones(nbr_covariates)
+# plotting
 
-# create a twice differentable fuction (to get the Hessian after the optmization
-# see http://julianlsolvers.github.io/Optim.jl/stable/#examples/generated/maxlikenlm/#maximum-likelihood-estimation-the-normal-linear-model)
-
-# run optimization using conjugate gradient decent with numerical gradients
-opt = optimize(logposterior, β_start, ConjugateGradient())
-
-# get parameter estimations (posterior mean)
-β_tilde = Optim.minimizer(opt)
-
-numerical_hessian = Symmetric(ForwardDiff.hessian(logposterior, β_tilde))
-
-# sample from approx posterior
-posterior_mean = β_tilde
-
-posterior_cov_m = inv(-numerical_hessian) + 10^(-2)*Matrix{Float64}(I, nbr_covariates, nbr_covariates)
-
-
-approx_posterior = MvNormal(posterior_mean, posterior_cov_m)
-
-posterior_samples = rand(approx_posterior, 10^4)
-
-
-# plot results
-
-h1_β1 = kde(posterior_samples[1,:])
-h1_β2 = kde(posterior_samples[2,:])
-h1_β3 = kde(posterior_samples[3,:])
-h1_β4 = kde(posterior_samples[4,:])
-h1_β5 = kde(posterior_samples[5,:])
-h1_β6 = kde(posterior_samples[6,:])
-h1_β7 = kde(posterior_samples[7,:])
-h1_β8 = kde(posterior_samples[8,:])
-h1_β9 = kde(posterior_samples[9,:])
-
-println("Posterior means:")
-print(mean(posterior_samples,dims = 2))
-
-println("Posterior std:")
-print(std(posterior_samples,dims = 2))
-
+# entier chain
 PyPlot.figure()
-PyPlot.subplot(331)
-PyPlot.plot(h1_β1.x,h1_β1.density, "b")
-PyPlot.plot(h1_β1.x,pdf.(dist_marginal_prior, h1_β1.x), "g")
-PyPlot.subplot(332)
-PyPlot.plot(h1_β2.x,h1_β2.density, "b")
-PyPlot.plot(h1_β2.x,pdf.(dist_marginal_prior, h1_β2.x), "g")
-PyPlot.subplot(333)
-PyPlot.plot(h1_β3.x,h1_β3.density, "b")
-PyPlot.plot(h1_β3.x,pdf.(dist_marginal_prior, h1_β3.x), "g")
-PyPlot.subplot(334)
-PyPlot.plot(h1_β4.x,h1_β4.density, "b")
-PyPlot.plot(h1_β4.x,pdf.(dist_marginal_prior, h1_β4.x), "g")
-PyPlot.subplot(335)
-PyPlot.plot(h1_β5.x,h1_β5.density, "b")
-PyPlot.plot(h1_β5.x,pdf.(dist_marginal_prior, h1_β5.x), "g")
-PyPlot.subplot(336)
-PyPlot.plot(h1_β6.x,h1_β6.density, "b")
-PyPlot.plot(h1_β6.x,pdf.(dist_marginal_prior, h1_β6.x), "g")
-PyPlot.subplot(337)
-PyPlot.plot(h1_β7.x,h1_β7.density, "b")
-PyPlot.plot(h1_β7.x,pdf.(dist_marginal_prior, h1_β7.x), "g")
-PyPlot.subplot(338)
-PyPlot.plot(h1_β8.x,h1_β8.density, "b")
-PyPlot.plot(h1_β8.x,pdf.(dist_marginal_prior, h1_β8.x), "g")
-PyPlot.subplot(339)
-PyPlot.plot(h1_β9.x,h1_β9.density, "b")
-PyPlot.plot(h1_β9.x,pdf.(dist_marginal_prior, h1_β9.x), "g")
+PyPlot.subplot(211)
+PyPlot.plot(post_samples[1,:], "b")
+PyPlot.subplot(212)
+PyPlot.plot(post_samples[2,:], "b")
 
-
-# simulate from posterior predictive
-
-posterior_samples = rand(approx_posterior, 10^3)
-posterior_pred_bids = zeros(10^3)
-
-x_case = [1, 1, 1, 1, 0, 0, 0, 1, 0.5]
-
-for i = 1:10^3
-    dist_bids = Poisson(exp(x_case'*posterior_samples[:,i]))
-    posterior_pred_bids[i] = rand(dist_bids)
-end
-
-println("Posterior means:")
-print(mean(posterior_pred_bids))
-
-println("Posterior std:")
-print(std(posterior_pred_bids))
-
+# chain after burnin
 PyPlot.figure()
-h = PyPlot.plt[:hist](posterior_pred_bids,10)
+PyPlot.subplot(211)
+PyPlot.plot(post_samples[1,burn_in+1:end], "b")
+PyPlot.subplot(212)
+PyPlot.plot(post_samples[2,burn_in+1:end], "b")
 
-# here we should have a bar plot
+h1_μ_1 = kde(post_samples[1,burn_in+1:end])
+h1_μ_2 = kde(post_samples[2,burn_in+1:end])
+
+println("Posterior (marginal) means:")
+println(mean(post_samples[:,burn_in+1:end],dims = 2))
+
+println("Posterior (marginal) std:")
+println(std(post_samples[:,burn_in+1:end],dims = 2))
+
+# marginal posteriors
+PyPlot.figure()
+PyPlot.subplot(211)
+PyPlot.plot(h1_μ_1.x,h1_μ_1.density, "b")
+PyPlot.plot(h1_μ_1.x,pdf.(dist_marginal_prior, h1_μ_1.x), "g")
+PyPlot.subplot(212)
+PyPlot.plot(h1_μ_2.x,h1_μ_2.density, "b")
+PyPlot.plot(h1_μ_2.x,pdf.(dist_marginal_prior, h1_μ_2.x), "g")
+
+# find optimal action numerically 
