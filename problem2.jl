@@ -4,6 +4,10 @@ using Distributions
 using KernelDensity
 using PyPlot
 using LinearAlgebra
+using Random
+
+# fix random numbers
+Random.seed!(1234)
 
 # load file
 file = open("bivarnormal.dat")
@@ -71,7 +75,6 @@ function gibbs(N_samples, μ_post = μ_post, Σ_post = Σ_post)
         # sample 1 give 2
         post_cond_1_give_2_m = μ_post_1+Σ_post_12*inv(Σ_post_22)*(μ_2_old-μ_post_2)
         post_cond_1_give_2_std = sqrt(Σ_post_11 - Σ_post_12*inv(Σ_post_22)*Σ_post_12)
-
         sample_cond_1_give_2 = rand(Normal(post_cond_1_give_2_m, post_cond_1_give_2_std))
 
         # sample 2 give 1
@@ -132,6 +135,7 @@ PyPlot.plot(h1_μ_2.x,pdf.(dist_marginal_prior, h1_μ_2.x), "g")
 
 # find optimal action numerically
 
+# utility function
 function utility(α, μ)
 
     ϕ = min(μ[1], μ[2])
@@ -140,6 +144,7 @@ function utility(α, μ)
 
 end
 
+# expected utility function
 function expected_utility(α, posterior_samples)
 
     N = size(posterior_samples,2)
@@ -154,7 +159,7 @@ function expected_utility(α, posterior_samples)
 
 end
 
-obj_func(α) = -expected_utility(α[1], post_samples[:,burn_in+1:end])
+obj_func(α) = -expected_utility(α[1], post_samples[:,burn_in+1:end]) # Optim does minimization, hence the minus sign
 
 α_start = [10.]
 

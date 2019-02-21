@@ -1,11 +1,14 @@
 # load packages
 using Optim
 using LinearAlgebra
-#using NLSolversBase
 using Distributions
 using ForwardDiff
 using KernelDensity
 using PyPlot
+using Random
+
+# fix random numbers
+Random.seed!(1234)
 
 # load file
 file = open("eBayNumberOfBidderData.dat")
@@ -52,11 +55,7 @@ function logposterior(β)
 end
 
 # start values for optimizer
-
 β_start = ones(nbr_covariates)
-
-# create a twice differentable fuction (to get the Hessian after the optmization
-# see http://julianlsolvers.github.io/Optim.jl/stable/#examples/generated/maxlikenlm/#maximum-likelihood-estimation-the-normal-linear-model)
 
 # run optimization using conjugate gradient decent with numerical gradients
 opt = optimize(logposterior, β_start, ConjugateGradient())
@@ -70,7 +69,6 @@ numerical_hessian = Symmetric(ForwardDiff.hessian(logposterior, β_tilde))
 posterior_mean = β_tilde
 
 posterior_cov_m = inv(-numerical_hessian) + 10^(-2)*Matrix{Float64}(I, nbr_covariates, nbr_covariates)
-
 
 approx_posterior = MvNormal(posterior_mean, posterior_cov_m)
 
@@ -133,8 +131,8 @@ posterior_pred_bids = zeros(10^3)
 x_case = [1, 1, 1, 1, 0, 0, 0, 1, 0.5]
 
 for i = 1:10^3
-    dist_bids = Poisson(exp(x_case'*posterior_samples[:,i]))
-    posterior_pred_bids[i] = rand(dist_bids)
+    sample_bids = Poisson(exp(x_case'*posterior_samples[:,i]))
+    posterior_pred_bids[i] = rand(sample_bids)
 end
 
 println("Posterior means:")
