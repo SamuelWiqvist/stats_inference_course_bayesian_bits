@@ -31,12 +31,15 @@ for i = 1:nbr_obs
     end
 end
 
-# remove NaNs TODO: Do something for the missing values!
-X_data = zeros(2,nbr_obs-3)
-X_data[:,1:2] = X[:,1:2]
-X_data[:,3:end] = X[:,6:end]
-X = X_data
-nbr_obs = nbr_obs-3
+
+# Random replacment of NaN
+X_data_not_nan = zeros(2,nbr_obs-3)
+X_data_not_nan[:,1:2] = X[:,1:2]
+X_data_not_nan[:,3:end] = X[:,6:end]
+
+X[1,3:4] = sample(X_data_not_nan[1,:],2)
+X[2,5] = sample(X_data_not_nan[2,:],1)[1]
+
 
 # prior dist
 Σ_0 = 10^2*Matrix{Float64}(I, dimensions, dimensions)

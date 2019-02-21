@@ -141,7 +141,14 @@ println(mean(posterior_pred_bids))
 println("Posterior predictive std:")
 println(std(posterior_pred_bids))
 
-PyPlot.figure()
-h = PyPlot.plt[:hist](posterior_pred_bids,10)
 
-# here we should have a bar plot
+max_bids = Int(maximum(posterior_pred_bids))
+nbr_bids = zeros(max_bids+1)
+
+for i = 0:max_bids
+    nbr_bids[i+1] = length(findall(x->x==i, posterior_pred_bids))
+end
+
+
+PyPlot.figure()
+b = bar(0:max_bids,nbr_bids)
