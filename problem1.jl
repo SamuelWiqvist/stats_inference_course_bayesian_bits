@@ -135,11 +135,11 @@ for i = 1:10^3
     posterior_pred_bids[i] = rand(sample_bids)
 end
 
-println("Posterior means:")
-print(mean(posterior_pred_bids))
+println("Posterior predictive mean:")
+println(mean(posterior_pred_bids))
 
-println("Posterior std:")
-print(std(posterior_pred_bids))
+println("Posterior predictive std:")
+println(std(posterior_pred_bids))
 
 PyPlot.figure()
 h = PyPlot.plt[:hist](posterior_pred_bids,10)
