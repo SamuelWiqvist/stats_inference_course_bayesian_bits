@@ -162,6 +162,6 @@ end
 
 
 PyPlot.figure(figsize=(6,6))
-b = bar(0:max_bids,nbr_bids)
+b = bar(0:max_bids,nbr_bids/10^3)
 PyPlot.xlabel("Bids",fontsize=text_size)
-PyPlot.ylabel("Nbr. of bids",fontsize=text_size)
+PyPlot.ylabel("Freq.",fontsize=text_size)
