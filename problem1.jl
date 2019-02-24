@@ -48,7 +48,7 @@ function logposterior(β)
 
     end
 
-    logpos = logpos - 0.5*β'prior_cov_m_inv*β
+    logpos = logpos - 0.5*β'*prior_cov_m_inv*β
 
     return -logpos # Optim does minimization, hence the minus sign
 
@@ -88,39 +88,50 @@ h1_β8 = kde(posterior_samples[8,:])
 h1_β9 = kde(posterior_samples[9,:])
 
 println("Posterior (marginal) means:")
-println(mean(posterior_samples,dims = 2))
+println(round.(mean(posterior_samples,dims = 2); digits=3))
 
 println("Posterior (marginal) std:")
-println(std(posterior_samples,dims = 2))
+println(round.(std(posterior_samples,dims = 2); digits=3))
 
-PyPlot.figure()
+
+text_size = 10
+PyPlot.figure(figsize=(12,12))
 PyPlot.subplot(331)
 PyPlot.plot(h1_β1.x,h1_β1.density, "b")
 PyPlot.plot(h1_β1.x,pdf.(dist_marginal_prior, h1_β1.x), "g")
+PyPlot.xlabel(L"\beta_1",fontsize=text_size)
 PyPlot.subplot(332)
 PyPlot.plot(h1_β2.x,h1_β2.density, "b")
 PyPlot.plot(h1_β2.x,pdf.(dist_marginal_prior, h1_β2.x), "g")
+PyPlot.xlabel(L"\beta_2",fontsize=text_size)
 PyPlot.subplot(333)
 PyPlot.plot(h1_β3.x,h1_β3.density, "b")
 PyPlot.plot(h1_β3.x,pdf.(dist_marginal_prior, h1_β3.x), "g")
+PyPlot.xlabel(L"\beta_3",fontsize=text_size)
 PyPlot.subplot(334)
 PyPlot.plot(h1_β4.x,h1_β4.density, "b")
 PyPlot.plot(h1_β4.x,pdf.(dist_marginal_prior, h1_β4.x), "g")
+PyPlot.xlabel(L"\beta_4",fontsize=text_size)
 PyPlot.subplot(335)
 PyPlot.plot(h1_β5.x,h1_β5.density, "b")
 PyPlot.plot(h1_β5.x,pdf.(dist_marginal_prior, h1_β5.x), "g")
+PyPlot.xlabel(L"\beta_5",fontsize=text_size)
 PyPlot.subplot(336)
 PyPlot.plot(h1_β6.x,h1_β6.density, "b")
 PyPlot.plot(h1_β6.x,pdf.(dist_marginal_prior, h1_β6.x), "g")
+PyPlot.xlabel(L"\beta_6",fontsize=text_size)
 PyPlot.subplot(337)
 PyPlot.plot(h1_β7.x,h1_β7.density, "b")
 PyPlot.plot(h1_β7.x,pdf.(dist_marginal_prior, h1_β7.x), "g")
+PyPlot.xlabel(L"\beta_7",fontsize=text_size)
 PyPlot.subplot(338)
 PyPlot.plot(h1_β8.x,h1_β8.density, "b")
 PyPlot.plot(h1_β8.x,pdf.(dist_marginal_prior, h1_β8.x), "g")
+PyPlot.xlabel(L"\beta_8",fontsize=text_size)
 PyPlot.subplot(339)
 PyPlot.plot(h1_β9.x,h1_β9.density, "b")
 PyPlot.plot(h1_β9.x,pdf.(dist_marginal_prior, h1_β9.x), "g")
+PyPlot.xlabel(L"\beta_9",fontsize=text_size)
 
 
 # simulate from posterior predictive
@@ -150,5 +161,7 @@ for i = 0:max_bids
 end
 
 
-PyPlot.figure()
+PyPlot.figure(figsize=(6,6))
 b = bar(0:max_bids,nbr_bids)
+PyPlot.xlabel("Bids",fontsize=text_size)
+PyPlot.ylabel("Nbr. of bids",fontsize=text_size)

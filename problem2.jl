@@ -105,36 +105,45 @@ post_samples = gibbs(nbr_samples+burn_in)
 # plotting
 
 # entier chain
-PyPlot.figure()
+PyPlot.figure(figsize=(10,6))
 PyPlot.subplot(211)
 PyPlot.plot(post_samples[1,:], "b")
+PyPlot.ylabel(L"\mu_1",fontsize=text_size)
 PyPlot.subplot(212)
 PyPlot.plot(post_samples[2,:], "b")
+PyPlot.xlabel(L"Iteration",fontsize=text_size)
+PyPlot.ylabel(L"\mu_2",fontsize=text_size)
 
 # chain after burnin
-PyPlot.figure()
+PyPlot.figure(figsize=(10,6))
 PyPlot.subplot(211)
 PyPlot.plot(post_samples[1,burn_in+1:end], "b")
+PyPlot.ylabel(L"\mu_1",fontsize=text_size)
 PyPlot.subplot(212)
 PyPlot.plot(post_samples[2,burn_in+1:end], "b")
+PyPlot.xlabel(L"Iteration",fontsize=text_size)
+PyPlot.ylabel(L"\mu_2",fontsize=text_size)
 
 h1_μ_1 = kde(post_samples[1,burn_in+1:end])
 h1_μ_2 = kde(post_samples[2,burn_in+1:end])
 
 println("Posterior (marginal) means:")
-println(mean(post_samples[:,burn_in+1:end],dims = 2))
+println(round.(mean(post_samples[:,burn_in+1:end],dims = 2); digits=3))
 
 println("Posterior (marginal) std:")
-println(std(post_samples[:,burn_in+1:end],dims = 2))
+println(round.(std(post_samples[:,burn_in+1:end],dims = 2); digits=3))
 
+text_size = 10
 # marginal posteriors
-PyPlot.figure()
-PyPlot.subplot(211)
+PyPlot.figure(figsize=(10,6))
+PyPlot.subplot(121)
 PyPlot.plot(h1_μ_1.x,h1_μ_1.density, "b")
 PyPlot.plot(h1_μ_1.x,pdf.(dist_marginal_prior, h1_μ_1.x), "g")
-PyPlot.subplot(212)
+PyPlot.xlabel(L"\mu_1",fontsize=text_size)
+PyPlot.subplot(122)
 PyPlot.plot(h1_μ_2.x,h1_μ_2.density, "b")
 PyPlot.plot(h1_μ_2.x,pdf.(dist_marginal_prior, h1_μ_2.x), "g")
+PyPlot.xlabel(L"\mu_1",fontsize=text_size)
 
 # find optimal action numerically
 
@@ -171,4 +180,4 @@ opt = optimize(obj_func, α_start, BFGS())
 α_tilde = Optim.minimizer(opt)
 
 println("Optimal action:")
-println(α_tilde)
+println(round.(α_tilde; digits=3))
