@@ -32,108 +32,134 @@ for i = 1:nbr_obs
 end
 
 
-# Random replacment of NaN
-X_data_not_nan = zeros(2,nbr_obs-3)
-X_data_not_nan[:,1:2] = X[:,1:2]
-X_data_not_nan[:,3:end] = X[:,6:end]
-
-X[1,3:4] = sample(X_data_not_nan[1,:],2)
-X[2,5] = sample(X_data_not_nan[2,:],1)[1]
-
 
 # prior dist
-Σ_0 = 10^2*Matrix{Float64}(I, dimensions, dimensions)
+Σ_0 = Symmetric(10^2*Matrix{Float64}(I, dimensions, dimensions))
 μ_0 = zeros(dimensions)
 
 dist_marginal_prior = Normal(0, 10)
 
-
 # data model
-Σ = [1 1.5; 1.5 4]
-
-# Joint posterior (see https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution)
-x_bar = mean(X, dims = 2) # sample mean
-μ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))*(inv(Σ_0)*μ_0 + nbr_obs*inv(Σ)*x_bar)
-Σ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))
+Σ = Symmetric([1 1.5; 1.5 4])
 
 # Gibbs sampler
-function gibbs(N_samples, μ_post = μ_post, Σ_post = Σ_post)
+function gibbs(N_samples, Σ_0 = Σ_0, Σ=Σ, X_data = X, dimensions=dimensions)
 
-    # construct conditional dists
-    μ_post_1 = μ_post[1]
-    μ_post_2 = μ_post[2]
-
-    Σ_post_11 = Σ_post[1,1]
-    Σ_post_22 = Σ_post[2,2]
-    Σ_post_12 = Σ_post[1,2]
 
     # pre-allocate matrix
+    missing_data_values = zeros(3, N_samples)
     μ_post_sample = zeros(dimensions, N_samples)
 
     # set start value
+    μ_1_old = 100
     μ_2_old = 100
 
     for i = 1:N_samples
 
-        # sample 1 give 2
-        post_cond_1_give_2_m = μ_post_1+Σ_post_12*inv(Σ_post_22)*(μ_2_old-μ_post_2)
-        post_cond_1_give_2_std = sqrt(Σ_post_11 - Σ_post_12*inv(Σ_post_22)*Σ_post_12)
-        sample_cond_1_give_2 = rand(Normal(post_cond_1_give_2_m, post_cond_1_give_2_std))
+        # sample missing data values
+        mean_missing_1 = μ_1_old + Σ[1,2]*inv(Σ[2,2])*(X[2,3]-μ_2_old)
+        mean_missing_2 = μ_1_old + Σ[1,2]*inv(Σ[2,2])*(X[2,4]-μ_2_old)
+        mean_missing_3 = μ_2_old + Σ[2,1]*inv(Σ[1,1])*(X[1,5]-μ_1_old)
 
-        # sample 2 give 1
-        post_cond_2_give_1_m = μ_post_2+Σ_post_12*inv(Σ_post_11)*(sample_cond_1_give_2-μ_post_1)
-        post_cond_2_give_1_std = sqrt(Σ_post_22 - Σ_post_12*inv(Σ_post_11)*Σ_post_12)
-        sample_cond_2_give_1 = rand(Normal(post_cond_2_give_1_m, post_cond_2_give_1_std))
+        sigma2_missing_1 = Σ[1,1]-Σ[1,2]*inv(Σ[2,2])*Σ[2,1]
+        sigma2_missing_2 = Σ[1,2]-Σ[1,2]*inv(Σ[2,2])*Σ[2,1]
+        sigma2_missing_3 = Σ[2,2]-Σ[2,1]*inv(Σ[1,1])*Σ[1,2]
+
+
+        missing_data_values[1,i] = mean_missing_1 + sqrt(sigma2_missing_1)*randn()
+        missing_data_values[2,i] = mean_missing_2 + sqrt(sigma2_missing_2)*randn()
+        missing_data_values[3,i] = mean_missing_3 + sqrt(sigma2_missing_3)*randn()
+
+        X_data[1,3] = missing_data_values[1,i]
+        X_data[1,4] = missing_data_values[2,i]
+        X_data[2,5] = missing_data_values[3,i]
+
+        # Joint posterior (see https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution)
+        x_bar = mean(X_data, dims = 2) # sample mean
+        μ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))*(inv(Σ_0)*μ_0 + nbr_obs*inv(Σ)*x_bar)
+        Σ_post = inv((inv(Σ_0)+nbr_obs*inv(Σ)))
+
+        println(μ_post)
+        println(Σ_post)
+
+        post =  MvNormal(μ_post[:], Σ_post)
 
         # store samples
-        μ_post_sample[:,i] = [sample_cond_1_give_2;sample_cond_2_give_1]
+        μ_post_sample[:,i] = rand(post)
 
-        # update 2 give 1
-        μ_2_old = sample_cond_2_give_1
+        # μ_old
+        μ_1_old,μ_2_old = μ_post_sample[:,i]
 
     end
 
-    return μ_post_sample
+    return μ_post_sample, missing_data_values
 
 end
 
 # run gibbs sampler
 nbr_samples = 10^3
 burn_in = 100
-post_samples = gibbs(nbr_samples+burn_in)
+μ_post_sample,missing_data_values = gibbs(nbr_samples+burn_in)
 
 # plotting
+text_size = 10
 
 # entier chain
 PyPlot.figure(figsize=(10,6))
-PyPlot.subplot(211)
-PyPlot.plot(post_samples[1,:], "b")
-PyPlot.ylabel(L"\mu_1",fontsize=text_size)
-PyPlot.subplot(212)
-PyPlot.plot(post_samples[2,:], "b")
+PyPlot.subplot(311)
+PyPlot.plot(missing_data_values[1,:], "b")
+PyPlot.ylabel("Missing value 1",fontsize=text_size)
+PyPlot.subplot(312)
+PyPlot.plot(missing_data_values[2,:], "b")
+PyPlot.ylabel("Missing value 2",fontsize=text_size)
+PyPlot.subplot(313)
+PyPlot.plot(missing_data_values[3,:], "b")
 PyPlot.xlabel(L"Iteration",fontsize=text_size)
-PyPlot.ylabel(L"\mu_2",fontsize=text_size)
+PyPlot.ylabel("Missing value 3",fontsize=text_size)
+
+PyPlot.figure(figsize=(10,6))
+PyPlot.subplot(311)
+PyPlot.plot(missing_data_values[1,burn_in+1:end], "b")
+PyPlot.ylabel("Missing value 1",fontsize=text_size)
+PyPlot.subplot(312)
+PyPlot.plot(missing_data_values[2,burn_in+1:end], "b")
+PyPlot.ylabel("Missing value 2",fontsize=text_size)
+PyPlot.subplot(313)
+PyPlot.plot(missing_data_values[3,burn_in+1:end], "b")
+PyPlot.xlabel(L"Iteration",fontsize=text_size)
+PyPlot.ylabel("Missing value 3",fontsize=text_size)
+
+
 
 # chain after burnin
 PyPlot.figure(figsize=(10,6))
 PyPlot.subplot(211)
-PyPlot.plot(post_samples[1,burn_in+1:end], "b")
+PyPlot.plot(μ_post_sample[1,burn_in+1:end], "b")
 PyPlot.ylabel(L"\mu_1",fontsize=text_size)
 PyPlot.subplot(212)
-PyPlot.plot(post_samples[2,burn_in+1:end], "b")
+PyPlot.plot(μ_post_sample[2,burn_in+1:end], "b")
 PyPlot.xlabel(L"Iteration",fontsize=text_size)
 PyPlot.ylabel(L"\mu_2",fontsize=text_size)
 
-h1_μ_1 = kde(post_samples[1,burn_in+1:end])
-h1_μ_2 = kde(post_samples[2,burn_in+1:end])
+# entier chain
+PyPlot.figure(figsize=(10,6))
+PyPlot.subplot(211)
+PyPlot.plot(μ_post_sample[1,:], "b")
+PyPlot.ylabel(L"\mu_1",fontsize=text_size)
+PyPlot.subplot(212)
+PyPlot.plot(μ_post_sample[2,:], "b")
+PyPlot.xlabel(L"Iteration",fontsize=text_size)
+PyPlot.ylabel(L"\mu_2",fontsize=text_size)
+
+h1_μ_1 = kde(μ_post_sample[1,burn_in+1:end])
+h1_μ_2 = kde(μ_post_sample[2,burn_in+1:end])
 
 println("Posterior (marginal) means:")
-println(round.(mean(post_samples[:,burn_in+1:end],dims = 2); digits=3))
+println(round.(mean(μ_post_sample[:,burn_in+1:end],dims = 2); digits=3))
 
 println("Posterior (marginal) std:")
-println(round.(std(post_samples[:,burn_in+1:end],dims = 2); digits=3))
+println(round.(std(μ_post_sample[:,burn_in+1:end],dims = 2); digits=3))
 
-text_size = 10
 # marginal posteriors
 PyPlot.figure(figsize=(10,6))
 PyPlot.subplot(121)
